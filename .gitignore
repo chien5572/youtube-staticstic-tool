@@ -1,0 +1,21 @@
+# Configuration file containing local API key and paths
+config.json
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Local outputs / logs
+output/
+data_test/
+*.log

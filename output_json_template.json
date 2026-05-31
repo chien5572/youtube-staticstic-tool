@@ -1,0 +1,15 @@
+{
+    "channel_name": "Tên kênh",
+    "channel_link": "iink cùa channel",
+    "subcriber": "số lượng người đăng ký kênh",
+    "video_num": "Tổng số lượng video",
+    "videos_list": [
+        {
+            "title": "Tiêu đề video",
+            "view_count": "số lượng view",
+            "published_at": "ngày đăng video - theo định dạng dd/MM/yyyy",
+            "duration": "thời lượng video - quy đổi sang giây",
+            "video_link": "link của video"
+        }
+    ]
+}

@@ -19,3 +19,8 @@ __pycache__/
 output/
 data_test/
 *.log
+
+# PyInstaller build directories and files
+build/
+dist/
+*.spec

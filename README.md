@@ -20,9 +20,9 @@
 
 | Chức năng | Mô tả |
 |---|---|
-| **All** | Lấy toàn bộ video mới nhất từ kênh (tối đa 1000 video) |
-| **100new** | Lấy 100 video mới nhất |
-| **100views** | Lấy 100 video có lượt xem cao nhất |
+| **Tất cả video** | Lấy toàn bộ video từ kênh (không giới hạn số lượng) |
+| **Video mới nhất** | Lấy số lượng video mới nhất tùy chọn (mặc định 100) |
+| **Video nhiều lượt xem nhất** | Lấy số lượng video có lượt xem cao nhất tùy chọn (mặc định 100) |
 
 **Thông tin được thu thập cho mỗi video:**
 - Tiêu đề video
@@ -133,9 +133,9 @@ python main.py
 3. **Chọn thư mục output**: Click **"Chọn..."** để chọn thư mục lưu file kết quả.
 
 4. **Chọn chức năng**:
-   - 📋 **Tất cả video** (tối đa 1000)
-   - 🆕 **100 video mới nhất**
-   - 🔥 **100 video nhiều lượt xem nhất**
+   - 📋 **Tất cả video** (không giới hạn số lượng)
+   - 🆕 **Video mới nhất** (cho phép nhập số lượng tùy chọn, mặc định 100)
+   - 🔥 **Video nhiều lượt xem nhất** (cho phép nhập số lượng tùy chọn, mặc định 100)
 
 5. **Bấm "BẮT ĐẦU LẤY DỮ LIỆU"** và chờ đợi. Thanh tiến trình sẽ hiển thị trạng thái.
 
@@ -190,8 +190,9 @@ python main.py
 
 ```
 Lần 1: json/Tech-Channel_all.json và csv/Tech-Channel_all.csv
-Lần 2: json/Tech-Channel_all_v1.json và csv/Tech-Channel_all_v1.csv
-Lần 3: json/Tech-Channel_all_v2.json và csv/Tech-Channel_all_v2.csv
+Lần 2: json/Tech-Channel_250new.json và csv/Tech-Channel_250new.csv
+Lần 3: json/Tech-Channel_156vew.json và csv/Tech-Channel_156vew.csv
+Lần 4: json/Tech-Channel_156vew_v1.json và csv/Tech-Channel_156vew_v1.csv
 ```
 
 ---
@@ -202,11 +203,11 @@ Lần 3: json/Tech-Channel_all_v2.json và csv/Tech-Channel_all_v2.csv
 
 YouTube Data API v3 miễn phí giới hạn **10,000 quota/ngày**.
 
-| Chức năng | Quota ước tính | Số lần chạy/ngày |
-|---|---|---|
-| All (1000 video) | ~43 quota | ~230 lần |
-| 100new | ~6 quota | ~1600 lần |
-| 100views | ~43 quota | ~230 lần |
+| Chức năng | Quota ước tính |
+|---|---|
+| Tất cả video | ~1 quota cho mỗi 50 video (danh sách) + ~1 quota cho mỗi 50 video (chi tiết) |
+| Video mới nhất (N video) | ~1 quota cho mỗi 50 video (danh sách) + ~1 quota cho mỗi 50 video (chi tiết) |
+| Video nhiều lượt xem nhất (N video) | Lấy danh sách toàn bộ video (~1 quota / 50 video) + lấy chi tiết để xếp hạng (~1 quota / 50 video) |
 
 > Ứng dụng sử dụng `playlistItems` API (1 quota/request) thay vì `search` API (100 quota/request), giúp tiết kiệm quota đáng kể.
 

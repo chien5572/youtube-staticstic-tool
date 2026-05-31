@@ -50,7 +50,7 @@ def generate_filename(channel_name, mode, output_dir, extension=".json"):
     
     Args:
         channel_name: Tên channel đã sanitize
-        mode: Chế độ ("all", "100new", "100views")
+        mode: Chế độ / hậu tố của file (ví dụ: "all", "250new", "156vew")
         output_dir: Thư mục output
         extension: Phần mở rộng file (".json" hoặc ".csv")
         
@@ -81,7 +81,7 @@ def generate_file_pair(channel_name, mode, output_dir):
     
     Args:
         channel_name: Tên channel gốc (chưa sanitize)
-        mode: Chế độ ("all", "100new", "100views")
+        mode: Chế độ / hậu tố của file (ví dụ: "all", "250new", "156vew")
         output_dir: Thư mục output gốc
         
     Returns:

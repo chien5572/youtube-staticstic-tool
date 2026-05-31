@@ -17,8 +17,8 @@ from youtube_api import (
     extract_channel_id,
     get_channel_info,
     get_all_videos,
-    get_latest_100,
-    get_top_100_views,
+    get_latest_videos,
+    get_top_views,
     YouTubeAPIError,
     QuotaExceededError,
     InvalidAPIKeyError,
@@ -293,9 +293,9 @@ class YouTubeStatisticApp:
         modes_frame.pack(fill="x", pady=(0, 5))
 
         modes = [
-            ("all", "📋  Tất cả video mới nhất (tối đa 1000)"),
-            ("100new", "🆕  100 video mới nhất"),
-            ("100views", "🔥  100 video nhiều lượt xem nhất"),
+            ("all", "📋  Tất cả video (Không giới hạn)"),
+            ("new", "🆕  Video mới nhất"),
+            ("views", "🔥  Video nhiều lượt xem nhất"),
         ]
 
         for value, text in modes:
@@ -307,6 +307,35 @@ class YouTubeStatisticApp:
                 style="Mode.TRadiobutton",
             )
             rb.pack(anchor="w", pady=2)
+
+        # ── Limit Input ──────────────────────────────
+        self.limit_frame = ttk.Frame(card_inner, style="Card.TFrame")
+        self.limit_frame.pack(fill="x", pady=(5, 5))
+
+        self.limit_label = ttk.Label(self.limit_frame, text="🔢  Số lượng video:", style="Field.TLabel")
+        self.limit_label.pack(side="left", padx=(0, 10))
+
+        self.limit_var = tk.StringVar(value="100")
+
+        def validate_digit(P):
+            if P == "" or P.isdigit():
+                return True
+            return False
+        val_cmd = self.root.register(validate_digit)
+
+        self.limit_entry = ttk.Entry(
+            self.limit_frame,
+            textvariable=self.limit_var,
+            width=10,
+            validate="key",
+            validatecommand=(val_cmd, "%P"),
+            font=("Segoe UI", 10)
+        )
+        self.limit_entry.pack(side="left")
+
+        # Trace mode variable to enable/disable limit input
+        self.mode_var.trace_add("write", self._on_mode_changed)
+        self._on_mode_changed()
 
         # ── Start Button ─────────────────────────────
         self.start_btn = ttk.Button(
@@ -336,6 +365,16 @@ class YouTubeStatisticApp:
             style="Status.TLabel",
         )
         self.status_label.pack(anchor="w")
+
+    def _on_mode_changed(self, *args):
+        """Kích hoạt/vô hiệu hóa ô nhập số lượng dựa trên chức năng được chọn."""
+        mode = self.mode_var.get()
+        if mode == "all":
+            self.limit_entry.configure(state="disabled")
+            self.limit_label.configure(state="disabled")
+        else:
+            self.limit_entry.configure(state="normal")
+            self.limit_label.configure(state="normal")
 
     def _toggle_api_key(self):
         """Toggle hiển thị/ẩn API key."""
@@ -392,6 +431,23 @@ class YouTubeStatisticApp:
                 f"Thư mục không tồn tại:\n{output_dir}\n\nVui lòng chọn thư mục khác.",
             )
             return False
+
+        # Kiểm tra số lượng video nếu không chọn chế độ 'Tất cả'
+        mode = self.mode_var.get()
+        if mode != "all":
+            limit_str = self.limit_var.get().strip()
+            if not limit_str:
+                messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập số lượng video cần lấy.")
+                self.limit_entry.focus()
+                return False
+            try:
+                limit = int(limit_str)
+                if limit <= 0:
+                    raise ValueError()
+            except ValueError:
+                messagebox.showwarning("Số lượng không hợp lệ", "Số lượng video phải là một số nguyên dương.")
+                self.limit_entry.focus()
+                return False
 
         return True
 
@@ -457,12 +513,22 @@ class YouTubeStatisticApp:
                 scaled = 15 + int(current / total * 75) if total > 0 else 15
                 self.root.after(0, self._update_progress, scaled, 100, status)
 
+            # Parse limit
+            limit = 100
+            if mode != "all":
+                limit_str = self.limit_var.get().strip()
+                if limit_str:
+                    try:
+                        limit = int(limit_str)
+                    except ValueError:
+                        limit = 100
+
             if mode == "all":
                 videos = get_all_videos(api_key, channel_id, progress_callback)
-            elif mode == "100new":
-                videos = get_latest_100(api_key, channel_id, progress_callback)
-            elif mode == "100views":
-                videos = get_top_100_views(api_key, channel_id, progress_callback)
+            elif mode == "new":
+                videos = get_latest_videos(api_key, channel_id, limit, progress_callback)
+            elif mode == "views":
+                videos = get_top_views(api_key, channel_id, limit, progress_callback)
             else:
                 videos = []
 
@@ -477,7 +543,18 @@ class YouTubeStatisticApp:
                 "video_num": channel_info["video_num"],
             }
             output_data = build_output_data(output_channel_info, videos)
-            json_path, csv_path = generate_file_pair(channel_name, mode, output_dir)
+
+            # Xác định hậu tố cho tên file
+            if mode == "all":
+                file_mode = "all"
+            elif mode == "new":
+                file_mode = f"{limit}new"
+            elif mode == "views":
+                file_mode = f"{limit}vew"
+            else:
+                file_mode = mode
+
+            json_path, csv_path = generate_file_pair(channel_name, file_mode, output_dir)
 
             save_json(output_data, json_path)
 

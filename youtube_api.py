@@ -377,7 +377,7 @@ def get_video_details(api_key, video_ids, progress_callback=None):
     return details
 
 
-def _fetch_video_ids_from_playlist(api_key, playlist_id, max_results, progress_callback=None):
+def _fetch_video_ids_from_playlist(api_key, playlist_id, max_results, total_expected=None, progress_callback=None):
     """
     Lấy danh sách video ID từ playlist (Uploads playlist) bằng playlistItems API.
     
@@ -389,7 +389,8 @@ def _fetch_video_ids_from_playlist(api_key, playlist_id, max_results, progress_c
     Args:
         api_key: YouTube API key
         playlist_id: ID của playlist (uploads playlist)
-        max_results: Số lượng video tối đa cần lấy
+        max_results: Số lượng video tối đa cần lấy (int hoặc float('inf'))
+        total_expected: Số lượng video dự kiến của channel (dùng cho hiển thị tiến trình)
         progress_callback: Hàm callback(current, total, status_text)
         
     Returns:
@@ -399,12 +400,16 @@ def _fetch_video_ids_from_playlist(api_key, playlist_id, max_results, progress_c
     next_page_token = None
     total_fetched = 0
 
+    display_total = max_results if max_results != float('inf') else (total_expected or 100)
+    if display_total <= 0:
+        display_total = 100
+
     while total_fetched < max_results:
-        per_page = min(50, max_results - total_fetched)
+        per_page = min(50, max_results - total_fetched) if max_results != float('inf') else 50
         params = {
             "part": "contentDetails",
             "playlistId": playlist_id,
-            "maxResults": per_page,
+            "maxResults": int(per_page),
             "key": api_key
         }
 
@@ -433,8 +438,9 @@ def _fetch_video_ids_from_playlist(api_key, playlist_id, max_results, progress_c
                     break
 
         if progress_callback:
-            progress_callback(total_fetched, max_results,
-                              f"Đang lấy danh sách video: {total_fetched}/{max_results}...")
+            current_total = max(display_total, total_fetched)
+            progress_callback(total_fetched, current_total,
+                              f"Đang lấy danh sách video: {total_fetched}/{current_total}...")
 
         next_page_token = data.get("nextPageToken")
         if not next_page_token:
@@ -445,13 +451,13 @@ def _fetch_video_ids_from_playlist(api_key, playlist_id, max_results, progress_c
 
 def _build_video_list(api_key, video_ids, progress_callback=None, progress_phase1_pct=50):
     """
-    Lấy chi tiết video và xây dựng list kết quả theo format template.
+    Lấy chi tiết và xây dựng list video từ list video IDs.
     
     Args:
         api_key: YouTube API key
-        video_ids: List video ID
+        video_ids: List các video ID
         progress_callback: Hàm callback(current, total, status_text)
-        progress_phase1_pct: Phần trăm progress đã hoàn thành ở phase 1
+        progress_phase1_pct: Tỷ lệ phần trăm đã hoàn thành ở phase 1
         
     Returns:
         List các video dict theo format template
@@ -459,40 +465,46 @@ def _build_video_list(api_key, video_ids, progress_callback=None, progress_phase
     if not video_ids:
         return []
 
+    # Định nghĩa progress callback cho get_video_details
+    # Lấy chi tiết chiếm phần phần trăm còn lại (từ progress_phase1_pct đến 100%)
     remaining_pct = 100 - progress_phase1_pct
-    total_videos = len(video_ids)
 
-    def detail_progress(fetched, total):
-        if progress_callback:
-            pct = progress_phase1_pct + int(fetched / total * remaining_pct)
-            progress_callback(pct, 100, f"Đang lấy chi tiết video: {fetched}/{total}...")
-
-    if progress_callback:
-        progress_callback(progress_phase1_pct, 100,
-                          f"Đang lấy chi tiết {total_videos} video...")
+    def detail_progress(cur, total):
+        if progress_callback and total > 0:
+            current_pct = progress_phase1_pct + int(cur / total * remaining_pct)
+            progress_callback(current_pct, 100, f"Đang lấy chi tiết video: {cur}/{total}...")
 
     details = get_video_details(api_key, video_ids, detail_progress)
 
+    # Build kết quả theo thứ tự của video_ids ban đầu
+    # (Đảm bảo giữ đúng thứ tự ngày đăng hoặc thứ tự từ playlist)
     result = []
     for vid in video_ids:
         detail = details.get(vid)
-        if not detail:
-            continue
-
-        result.append({
-            "title": detail["title"],
-            "view_count": detail["view_count"],
-            "published_at": _format_date(detail["published_at"]),
-            "duration": detail["duration"],
-            "video_link": f"https://www.youtube.com/watch?v={vid}"
-        })
+        if detail:
+            result.append({
+                "title": detail["title"],
+                "view_count": detail["view_count"],
+                "published_at": _format_date(detail["published_at"]),
+                "duration": detail["duration"],
+                "video_link": f"https://www.youtube.com/watch?v={vid}"
+            })
+        else:
+            # Fallback nếu không lấy được chi tiết (hiếm gặp)
+            result.append({
+                "title": "N/A",
+                "view_count": "0",
+                "published_at": "N/A",
+                "duration": "0",
+                "video_link": f"https://www.youtube.com/watch?v={vid}"
+            })
 
     return result
 
 
 def get_all_videos(api_key, channel_id, progress_callback=None):
     """
-    Lấy tất cả video mới nhất từ channel (tối đa 1000).
+    Lấy tất cả video từ channel (không giới hạn).
     
     Sử dụng Uploads playlist → playlistItems API (đáng tin cậy, ít quota).
     
@@ -504,18 +516,19 @@ def get_all_videos(api_key, channel_id, progress_callback=None):
     Returns:
         List các video dict theo format template
     """
-    max_videos = 1000
-
-    # Lấy uploads playlist ID
     if progress_callback:
         progress_callback(0, 100, "Đang lấy thông tin channel...")
 
     channel_info = get_channel_info(api_key, channel_id)
     uploads_id = channel_info["uploads_playlist_id"]
+    try:
+        total_expected = int(channel_info["video_num"])
+    except ValueError:
+        total_expected = 1000
 
     # Phase 1 (0-50%): Lấy danh sách video IDs từ uploads playlist
     video_ids = _fetch_video_ids_from_playlist(
-        api_key, uploads_id, max_videos,
+        api_key, uploads_id, float('inf'), total_expected=total_expected,
         progress_callback=lambda cur, total, msg: (
             progress_callback(int(cur / total * 50), 100, msg) if progress_callback else None
         )
@@ -525,15 +538,14 @@ def get_all_videos(api_key, channel_id, progress_callback=None):
     return _build_video_list(api_key, video_ids, progress_callback, progress_phase1_pct=50)
 
 
-def get_latest_100(api_key, channel_id, progress_callback=None):
+def get_latest_videos(api_key, channel_id, limit=100, progress_callback=None):
     """
-    Lấy 100 video mới nhất từ channel.
-    
-    playlistItems trả về theo thứ tự mới nhất → chỉ cần lấy 100 đầu tiên.
+    Lấy N video mới nhất từ channel.
     
     Args:
         api_key: YouTube API key
         channel_id: Channel ID
+        limit: Số lượng video cần lấy
         progress_callback: Hàm callback(current, total, status_text)
         
     Returns:
@@ -545,9 +557,9 @@ def get_latest_100(api_key, channel_id, progress_callback=None):
     channel_info = get_channel_info(api_key, channel_id)
     uploads_id = channel_info["uploads_playlist_id"]
 
-    # Phase 1 (0-40%): Lấy 100 video IDs mới nhất
+    # Phase 1 (0-40%): Lấy N video IDs mới nhất
     video_ids = _fetch_video_ids_from_playlist(
-        api_key, uploads_id, 100,
+        api_key, uploads_id, limit, total_expected=limit,
         progress_callback=lambda cur, total, msg: (
             progress_callback(int(cur / total * 40), 100, msg) if progress_callback else None
         )
@@ -557,32 +569,35 @@ def get_latest_100(api_key, channel_id, progress_callback=None):
     return _build_video_list(api_key, video_ids, progress_callback, progress_phase1_pct=40)
 
 
-def get_top_100_views(api_key, channel_id, progress_callback=None):
+def get_top_views(api_key, channel_id, limit=100, progress_callback=None):
     """
-    Lấy 100 video có lượt view cao nhất từ channel.
+    Lấy N video có lượt view cao nhất từ channel.
     
-    Chiến lược: Lấy TẤT CẢ video (max 1000) từ uploads playlist,
-    lấy chi tiết (view count), sort giảm dần, trả về top 100.
+    Chiến lược: Lấy TẤT CẢ video từ uploads playlist,
+    lấy chi tiết (view count), sort giảm dần, trả về top N.
     
     Args:
         api_key: YouTube API key
         channel_id: Channel ID
+        limit: Số lượng video cần lấy
         progress_callback: Hàm callback(current, total, status_text)
         
     Returns:
         List các video dict theo format template, sorted by view_count desc
     """
-    max_videos = 1000
-
     if progress_callback:
         progress_callback(0, 100, "Đang lấy thông tin channel...")
 
     channel_info = get_channel_info(api_key, channel_id)
     uploads_id = channel_info["uploads_playlist_id"]
+    try:
+        total_expected = int(channel_info["video_num"])
+    except ValueError:
+        total_expected = 1000
 
-    # Phase 1 (0-40%): Lấy tất cả video IDs (max 1000) để tìm top views
+    # Phase 1 (0-40%): Lấy tất cả video IDs để tìm top views
     video_ids = _fetch_video_ids_from_playlist(
-        api_key, uploads_id, max_videos,
+        api_key, uploads_id, float('inf'), total_expected=total_expected,
         progress_callback=lambda cur, total, msg: (
             progress_callback(int(cur / total * 40), 100, msg) if progress_callback else None
         )
@@ -600,4 +615,4 @@ def get_top_100_views(api_key, channel_id, progress_callback=None):
     if progress_callback:
         progress_callback(100, 100, "Hoàn tất!")
 
-    return all_videos[:100]
+    return all_videos[:limit]

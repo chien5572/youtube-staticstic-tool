@@ -1,5 +1,6 @@
 # Configuration file containing local API key and paths
 config.json
+.env
 
 # Python bytecode and cache
 __pycache__/
